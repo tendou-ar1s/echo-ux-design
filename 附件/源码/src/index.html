@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
+<meta name="theme-color" content="#0A0E1A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="回声 Echo">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>回声 Echo · 给情绪一个回响的地方</title>
+<meta name="description" content="回声 Echo 是一个为 18–28 岁青年设计的短时情绪疗愈空间。一屏，一次呼吸，一段属于你的声音。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;500;600&family=Manrope:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.20261111e.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='30' fill='none' stroke='%23C8A96A' stroke-width='3'/><circle cx='50' cy='50' r='16' fill='none' stroke='%23C8A96A' stroke-width='3' opacity='0.6'/></svg>">
+</head>
+<body>
+
+<!-- 背景层：极光 + 噪点 -->
+<div class="bg-layer" aria-hidden="true">
+  <div class="aurora aurora--a"></div>
+  <div class="aurora aurora--b"></div>
+  <div class="aurora aurora--c"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- 音乐开关 -->
+<button id="soundToggle" class="sound-toggle" aria-label="开启或关闭环境音乐" aria-pressed="false">
+  <svg viewBox="0 0 24 24" class="sound-toggle__icon" aria-hidden="true">
+    <path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />
+  </svg>
+  <span class="sound-toggle__label">声音</span>
+</button>
+
+<main class="stage app-shell">
+
+  <!-- ============ 场景一：入口 ============ -->
+  <section class="scene scene--active" id="scene-intro" data-scene="intro">
+    <div class="intro">
+      <p class="eyebrow reveal" style="--d:0ms">ECHO · 回声</p>
+      <h1 class="hero-title">
+        <span class="reveal" style="--d:120ms">给情绪</span>
+        <span class="reveal" style="--d:240ms"><em>一个回响</em></span>
+        <span class="reveal" style="--d:360ms">的地方</span>
+      </h1>
+      <p class="lede reveal" style="--d:520ms">
+        一屏。一次呼吸。一段只属于此刻的声音。<br>
+        不需要注册，不留痕，随时可以离开。
+      </p>
+      <div class="intro__actions reveal" style="--d:680ms">
+        <button class="btn btn--primary" id="enterBtn">
+          <span>进入回声</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="btn btn--ghost" id="aboutBtn">这是什么？</button>
+      </div>
+      <p class="hint reveal" style="--d:820ms">建议戴上耳机 · 全程约 3 分钟</p>
+    </div>
+  </section>
+
+  <!-- ============ 场景二：情绪选择 ============ -->
+  <section class="scene" id="scene-mood" data-scene="mood">
+    <div class="mood">
+      <header class="mood__head">
+        <p class="eyebrow">第一步 · 此刻</p>
+        <h2 class="section-title">你现在，<em>是什么感觉</em>？</h2>
+        <p class="sub">没有正确答案。选一个最接近的就好。</p>
+      </header>
+      <div class="mood-grid" id="moodGrid" role="group" aria-label="选择当前情绪"></div>
+      <button class="btn btn--text back-link" data-back="intro">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+        返回
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ 场景三：呼吸 / 疗愈 ============ -->
+  <section class="scene" id="scene-breathe" data-scene="breathe">
+    <div class="breathe">
+      <p class="breath-state" id="breathLabel">准备好时，跟着圆点呼吸</p>
+
+      <div class="orb-wrap">
+        <div class="orb-halo"></div>
+        <div class="orb" id="orb">
+          <div class="orb__ring orb__ring--1"></div>
+          <div class="orb__ring orb__ring--2"></div>
+          <div class="orb__core"></div>
+        </div>
+        <div class="orb-count" id="orbCount" aria-hidden="true"></div>
+      </div>
+
+      <div class="breath-meta">
+        <span id="breathPhase">准备</span>
+        <span class="dot-sep" aria-hidden="true">·</span>
+        <span id="breathMoodLabel"></span>
+      </div>
+
+      <div class="breathe__actions">
+        <button class="btn btn--primary" id="startBreathBtn">开始呼吸</button>
+        <button class="btn btn--ghost" id="skipToEndBtn">直接写一句话</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 场景四：写下一句话（回声） ============ -->
+  <section class="scene" id="scene-echo" data-scene="echo">
+    <div class="echo">
+      <p class="eyebrow">最后一步 · 留下</p>
+      <h2 class="section-title">有句话，<em>想说给自己听</em>？</h2>
+      <p class="sub">写下来，它会成为一个回声。只有你听得到。</p>
+
+      <div class="echo-input-wrap">
+        <textarea id="echoInput" class="echo-input" maxlength="60" rows="3"
+          placeholder="比如：今天已经很努力了。"
+          aria-label="写下一句话"></textarea>
+        <span class="echo-count"><span id="echoCount">0</span>/60</span>
+      </div>
+
+      <div class="echo__actions">
+        <button class="btn btn--primary" id="submitEchoBtn">
+          <span>让它回响</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="btn btn--ghost" id="skipEchoBtn">跳过</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 场景五：完成回响 ============ -->
+  <section class="scene" id="scene-final" data-scene="final">
+    <div class="final">
+      <div class="final__stone">
+        <div class="stone" id="stone">
+          <div class="stone__ripple stone__ripple--1"></div>
+          <div class="stone__ripple stone__ripple--2"></div>
+          <div class="stone__ripple stone__ripple--3"></div>
+        </div>
+      </div>
+      <p class="final__quote" id="finalQuote"></p>
+      <p class="final__note" id="finalNote">这段回声已被风带走，没有被保存。</p>
+      <div class="final__actions">
+        <button class="btn btn--primary" id="shareBtn">
+          <span>生成我的回声卡</span>
+        </button>
+        <button class="btn btn--text" id="restartBtn">再做一次</button>
+      </div>
+      <p class="final__sign">ECHO · 回声 · 3 分钟，回到自己</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- 关于弹层 -->
+<div class="modal" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+  <div class="modal__backdrop" data-close-modal></div>
+  <div class="modal__panel">
+    <button class="modal__close" data-close-modal aria-label="关闭">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <p class="eyebrow">设计说明</p>
+    <h3 id="aboutTitle">为什么是"回声"</h3>
+    <div class="modal__body">
+      <p>青年人的孤独常常不是"没人陪"，而是<strong>情绪没有被接住</strong>——说出口太重，咽下去太堵。</p>
+      <p>回声把你的情绪先接住，再用一句话还给你。<strong>不诊断、不评判、不社交</strong>，也不要求你留下任何信息。</p>
+      <ul>
+        <li><strong>一次只做一件事</strong>：选情绪 → 呼吸 → 写一句 → 收到回响。</li>
+        <li><strong>不建内容池</strong>：没有广场、没有评论区、没有好友列表。</li>
+        <li><strong>数据不留存</strong>：你写的话只在本地生成卡片，不发送到服务器。</li>
+      </ul>
+      <p class="modal__meta">纯静态实现 · 服务器零计算 · 音乐为实时合成，无音频文件下载</p>
+    </div>
+  </div>
+</div>
+
+<!-- 回声卡 -->
+<div class="modal" id="cardModal" role="dialog" aria-modal="true" aria-label="你的回声卡" hidden>
+  <div class="modal__backdrop" data-close-modal></div>
+  <div class="card-wrap">
+    <div class="ecard" id="ecard">
+      <div class="ecard__inner">
+        <p class="ecard__brand">ECHO · 回声</p>
+        <p class="ecard__quote" id="cardQuote"></p>
+        <p class="ecard__date" id="cardDate"></p>
+      </div>
+    </div>
+    <div class="card-actions">
+      <button class="btn btn--primary" id="saveCardBtn">保存图片</button>
+      <button class="btn btn--ghost" data-close-modal>关闭</button>
+    </div>
+    <p class="hint">保存后即为本地图片，不会上传</p>
+  </div>
+</div>
+
+<canvas id="cardCanvas" width="1080" height="1440" hidden></canvas>
+
+<script src="app.20261111e.js"></script>
+</body>
+</html>
