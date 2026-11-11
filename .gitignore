@@ -1,0 +1,27 @@
+# 忽略临时文件
+node_modules/
+package-lock.json
+package.json
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 忽略预览与调试产物
+_preview.pdf
+_pv/
+_test*.js
+_probe*.js
+_volume*.js
+_final*.js
+_e2e*.js
+_wx_verify*.js
+_soft_test*.js
+__pycache__/
+*.pyc
+
+# 忽略编辑器
+.vscode/
+.idea/
+*.swp
