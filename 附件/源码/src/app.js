@@ -164,207 +164,140 @@
     },
 
     // ================================================
-    // 呼吸声系统：让声音真正跟随吸气/屏息/呼气的物理过程
-    // 不是"每个阶段响一下"，而是持续铺满整个呼吸周期
+    // 呼吸声系统（纯音调版）
+    //
+    // 设计转向：不再用噪声模拟"气流"，而是用有明确音高的乐音
+    // 来表现呼吸的强弱递增递减。
+    //
+    // 为什么这样更好：
+    // - 噪声没有音高，听感天然偏向"嘶嘶/沙沙"，容易被判为噪音
+    // - 音调有明确的和谐关系，能直接触发"平静、舒适"的联想
+    // - 音高上行=吸气（期待、充盈），下行=呼气（松开、放下）
+    //
+    // 音阶选择：D 大调五声音阶（D-E-F#-A-B）
+    // 五声音阶没有半音冲突，任意组合都和谐，适合长时间聆听
     // ================================================
 
+    /** D 大调五声音阶，跨两个八度，单位 Hz */
+    BREATH_SCALE: [
+      146.83, // D3
+      164.81, // E3
+      185.00, // F#3
+      220.00, // A3
+      246.94, // B3
+      293.66, // D4
+      329.63, // E4
+      369.99, // F#4
+      440.00  // A4
+    ],
+
     /**
-     * 生成气声噪声源（柔和版）
-     *
-     * 关键改进：用「粉红噪声」替代白噪声。
-     * 白噪声各频率能量均等，听感是"嘶嘶"的电流声/收音机噪声；
-     * 粉红噪声低频能量更多（-3dB/oct），更接近自然风声与真实呼吸。
-     *
-     * @param {number} dur 持续时间（秒）
-     * @param {number} centerHz 带通中心频率
-     * @param {number} q 带宽质量因子（越小越宽、越柔和）
+     * 弹一个柔和的长音
+     * @param {number} freq 频率
+     * @param {number} when 开始时间
+     * @param {number} dur 持续时间
+     * @param {number} vol 音量
+     * @param {string} timbre 'sine' | 'triangle'
      */
-    makeBreathNoise(dur, centerHz, q) {
+    softNote(freq, when, dur, vol, timbre = 'sine') {
       const ctx = this.ctx;
-      const rate = ctx.sampleRate;
-      const len = Math.floor(rate * dur);
-      const buf = ctx.createBuffer(1, len, rate);
-      const data = buf.getChannelData(0);
 
-      // --- 粉红噪声：用 Voss-McCartney 简化版（多个八度采样叠加）---
-      // 比白噪声柔和得多，没有刺耳的高频毛刺
-      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-      for (let i = 0; i < len; i++) {
-        const white = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.96900 * b2 + white * 0.1538520;
-        b3 = 0.86650 * b3 + white * 0.3104856;
-        b4 = 0.55000 * b4 + white * 0.5329522;
-        b5 = -0.7616 * b5 - white * 0.0168980;
-        // 混合并归一化，避免削波
-        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.09;
-        b6 = white * 0.115926;
-      }
+      const osc = ctx.createOscillator();
+      osc.type = timbre;
+      osc.frequency.setValueAtTime(freq, when);
 
-      // 首尾做淡入淡出，消除爆音（"咔哒"声）
-      const fadeLen = Math.min(Math.floor(rate * 0.06), Math.floor(len / 4));
-      for (let i = 0; i < fadeLen; i++) {
-        const k = i / fadeLen;
-        data[i] *= k;
-        data[len - 1 - i] *= k;
-      }
+      // 极轻的颤音，让长音有"活着"的呼吸感（不呆板）
+      const vib = ctx.createOscillator();
+      vib.type = 'sine';
+      vib.frequency.value = 4.2;
+      const vibGain = ctx.createGain();
+      vibGain.gain.value = freq * 0.004;   // 约 0.4% 音高波动，非常轻微
+      vib.connect(vibGain);
+      vibGain.connect(osc.frequency);
 
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
+      // 低通把所有泛音磨圆，消除电子感
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = Math.min(freq * 3.2, 2200);
+      lp.Q.value = 0.35;
 
-      // 带通：Q 值降低到 0.5~0.8 区间，声音宽而柔，没有"哨音"感
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = centerHz;
-      bp.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.linearRampToValueAtTime(vol, when + 0.14);        // 柔和起音
+      g.gain.linearRampToValueAtTime(vol * 0.78, when + dur * 0.6);  // 自然衰减
+      g.gain.linearRampToValueAtTime(0.0001, when + dur);
 
-      // 低通再收一道高频，彻底去掉尖锐的"嘶"感
-      const lp2 = ctx.createBiquadFilter();
-      lp2.type = 'lowpass';
-      lp2.frequency.value = centerHz * 1.8;
-      lp2.Q.value = 0.6;
+      osc.connect(lp);
+      lp.connect(g);
+      g.connect(this.placement);
 
-      // 高通切掉低频隆隆声，只保留"气流"频段
-      const hp = ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = centerHz * 0.35;
-      hp.Q.value = 0.5;
-
-      src.connect(bp);
-      bp.connect(lp2);
-      lp2.connect(hp);
-      return { src, out: hp };
+      osc.start(when);
+      vib.start(when);
+      osc.stop(when + dur + 0.05);
+      vib.stop(when + dur + 0.05);
     },
 
     /**
-     * 一次完整的"吸气"：气流由弱到强再收住
-     * 听感定位：明亮、向上、略轻（像把空气"吸进来"）
+     * 一次完整的"吸气"：音高逐级上行，音量渐强
+     * 感受：像把空气一点点吸进来，越来越高、越来越满
      */
     breathIn(dur) {
       if (!this.placementCtx) return;
       const ctx = this.ctx;
-      const t0 = ctx.currentTime + 0.03;
-      const t1 = t0 + dur;
+      const t0 = ctx.currentTime + 0.05;
 
-      // --- 气声层：中心频率降低、Q 值调低，声音宽而柔 ---
-      const { src, out } = this.makeBreathNoise(dur, 560, 0.75);
-      const ng = ctx.createGain();
-      // 吸气轮廓：缓起 → 中后段最饱满 → 末端柔和收住
-      ng.gain.setValueAtTime(0.0001, t0);
-      ng.gain.linearRampToValueAtTime(0.070, t0 + dur * 0.28);
-      ng.gain.linearRampToValueAtTime(0.125, t0 + dur * 0.66);
-      ng.gain.linearRampToValueAtTime(0.0001, t1 - 0.10);
-      out.connect(ng);
-      ng.connect(this.placement);
-      src.start(t0);
-      src.stop(t1 + 0.05);
+      // 取音阶的中间段，上行 5 个音
+      const notes = this.BREATH_SCALE.slice(1, 6);   // E3 → D4
+      const step = dur / notes.length;
 
-      // --- 音高层：极轻的低频托底，只做"空气在动"的暗示，不喧宾夺主 ---
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      const f0 = 146.83;  // D3，比之前更低沉
-      osc.frequency.setValueAtTime(f0, t0);
-      osc.frequency.linearRampToValueAtTime(f0 * 1.18, t1);  // 轻微上行，不刺耳
+      notes.forEach((f, i) => {
+        const when = t0 + i * step;
+        // 越往后音量越大，模拟气流的充盈感
+        const vol = 0.055 + (i / notes.length) * 0.048;
+        // 每个音的持续时间略长于步长，形成连贯的"滑上去"感
+        this.softNote(f, when, step * 2.4, vol, 'sine');
+      });
 
-      // 用一个低通把正弦磨圆，去掉任何可能的"电子感"
-      const soft = ctx.createBiquadFilter();
-      soft.type = 'lowpass';
-      soft.frequency.value = 400;
-      soft.Q.value = 0.4;
-
-      const og = ctx.createGain();
-      og.gain.setValueAtTime(0.0001, t0);
-      og.gain.linearRampToValueAtTime(0.028, t0 + dur * 0.35);
-      og.gain.linearRampToValueAtTime(0.042, t0 + dur * 0.72);
-      og.gain.linearRampToValueAtTime(0.0001, t1);
-
-      osc.connect(soft);
-      soft.connect(og);
-      og.connect(this.placement);
-      osc.start(t0);
-      osc.stop(t1 + 0.02);
+      // 高八度泛音点缀，让吸气末尾更"通透"
+      this.softNote(notes[notes.length - 1] * 2, t0 + dur * 0.72, dur * 0.5, 0.022, 'triangle');
     },
 
     /**
-     * 一次完整的"呼气"：气流由强渐弱，像叹气一样松开
-     * 听感定位：低沉、向下、略重（像把气"放出去"）
+     * 一次完整的"呼气"：音高逐级下行，音量渐弱
+     * 感受：像把气慢慢放掉，越来越低、越来越松
      */
     breathOut(dur) {
       if (!this.placementCtx) return;
       const ctx = this.ctx;
-      const t0 = ctx.currentTime + 0.03;
-      const t1 = t0 + dur;
+      const t0 = ctx.currentTime + 0.05;
 
-      // --- 气声层：更低沉、更散，像自然的叹气 ---
-      const { src, out } = this.makeBreathNoise(dur, 340, 0.65);
-      const ng = ctx.createGain();
-      // 呼气轮廓：柔和地起来 → 长长地散掉
-      ng.gain.setValueAtTime(0.0001, t0);
-      ng.gain.linearRampToValueAtTime(0.135, t0 + dur * 0.18);
-      ng.gain.linearRampToValueAtTime(0.105, t0 + dur * 0.45);
-      ng.gain.linearRampToValueAtTime(0.058, t0 + dur * 0.74);
-      ng.gain.linearRampToValueAtTime(0.0001, t1 - 0.12);
-      out.connect(ng);
-      ng.connect(this.placement);
-      src.start(t0);
-      src.stop(t1 + 0.05);
+      // 从高处开始，下行 5 个音
+      const notes = this.BREATH_SCALE.slice(1, 6).reverse();  // D4 → E3
+      const step = dur / notes.length;
 
-      // --- 音高层：极轻的下行托底，像叹息落地 ---
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      const f0 = 174.61;  // F3，比之前低一档
-      osc.frequency.setValueAtTime(f0, t0);
-      osc.frequency.linearRampToValueAtTime(f0 * 0.72, t1);  // 平缓下行
+      notes.forEach((f, i) => {
+        const when = t0 + i * step;
+        // 越往后音量越小，模拟气流的衰减
+        const vol = 0.098 - (i / notes.length) * 0.052;
+        // 呼气的声音拖得更长，像叹息一样化开
+        this.softNote(f, when, step * 2.8, vol, 'sine');
+      });
 
-      const soft = ctx.createBiquadFilter();
-      soft.type = 'lowpass';
-      soft.frequency.value = 380;
-      soft.Q.value = 0.4;
-
-      const og = ctx.createGain();
-      og.gain.setValueAtTime(0.0001, t0);
-      og.gain.linearRampToValueAtTime(0.024, t0 + dur * 0.2);
-      og.gain.linearRampToValueAtTime(0.0001, t1 - 0.1);
-
-      osc.connect(soft);
-      soft.connect(og);
-      og.connect(this.placement);
-      osc.start(t0);
-      osc.stop(t1 + 0.02);
+      // 低沉的低八度托底，给呼气"落地"的感觉
+      this.softNote(this.BREATH_SCALE[0], t0, dur * 0.9, 0.038, 'sine');
     },
 
     /**
-     * "屏息"：几乎无气声，只剩一个悬停的微弱音
-     * 让 2 秒的停顿有存在感，而不是纯静音
-     * 频率降到 D3 并加低通，避免任何明亮感打断平静
+     * "屏息"：一个极轻的悬停音
+     * 用音阶最高音的极弱泛音，制造"空气悬停"的紧张感，然后松开
      */
     breathHold(dur) {
       if (!this.placementCtx) return;
       const ctx = this.ctx;
-      const t0 = ctx.currentTime + 0.03;
-      const t1 = t0 + dur;
+      const t0 = ctx.currentTime + 0.05;
 
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(146.83, t0);   // D3，低而稳
-      osc.frequency.linearRampToValueAtTime(146.83 * 1.01, t1);
-
-      const soft = ctx.createBiquadFilter();
-      soft.type = 'lowpass';
-      soft.frequency.value = 320;
-      soft.Q.value = 0.4;
-
-      const og = ctx.createGain();
-      og.gain.setValueAtTime(0.0001, t0);
-      og.gain.linearRampToValueAtTime(0.012, t0 + dur * 0.35);
-      og.gain.linearRampToValueAtTime(0.0001, t1);
-
-      osc.connect(soft);
-      soft.connect(og);
-      og.connect(this.placement);
-      osc.start(t0);
-      osc.stop(t1 + 0.02);
+      // 悬停音：用 A3，与前后音的过渡最自然
+      this.softNote(220.00, t0, dur * 0.85, 0.020, 'sine');
     },
 
     /**
@@ -422,9 +355,9 @@
       const ctx = this.ctx;
 
       // 干声为主，抬高以压过背景音乐
-      // 粉红噪声能量比白噪声低，故增益比之前的 6.5 再高一些
+      // 纯音调的能量比噪声低且集中，需要足够的增益才能听清
       this.placement = ctx.createGain();
-      this.placement.gain.value = 7.8;
+      this.placement.gain.value = 3.4;
 
       // 少量混响，制造空间感但不飘
       const revSend = ctx.createGain();
